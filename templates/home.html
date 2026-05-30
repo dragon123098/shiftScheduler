@@ -7,8 +7,30 @@
 </header>
 <main>
     <div class="content">
-        <!-- Your content here -->
+        <form id="scheduleForm">
+            <label for="scheduleInput">Enter shift details:</label>
+            <input type="text" id="scheduleInput" name="scheduleInput" placeholder="Type here..." required>
+            <button type="submit">Save</button>
+        </form>
     </div>
+    
+    <script>
+        document.getElementById('scheduleForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const inputValue = document.getElementById('scheduleInput').value;
+            
+            fetch('/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ data: inputValue })
+            })
+            .then(response => response.json())
+            .then(data => console.log('Success:', data))
+            .catch((error) => console.error('Error:', error));
+        });
+    </script>
 </main>
 <footer>
     <p>&copy; 2026 Shift Scheduler</p>
