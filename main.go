@@ -45,22 +45,11 @@ var users = map[string]User{
 
 // Home handler to render the home page
 func student(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie("session_token")
-	if err != nil {
-		if err == http.ErrNoCookie {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-			return
-		}
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	_, ok := verifySession(w, r, 1)
+	if !ok {
+		log.Println("Unauthorized access attempt to student page")
 		return
 	}
-	sessionToken := c.Value
-	userSession, exists := sessions[sessionToken]
-	if !exists || userSession.isExpired() {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-	
 	
 	ts, err := template.ParseFiles("./templates/student.html")
 	if err != nil {
@@ -123,6 +112,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 func loginHandlerPost(w http.ResponseWriter, r *http.Request) {
 	
+	log.Println("Login attempt received")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
 		return
@@ -138,6 +128,8 @@ func loginHandlerPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//This addeds a session to our map. 
+	//You can access the session by using the Value in the cookie, which is the session token.
 	sessionToken := uuid.NewString()
 	expiresAt := time.Now().Add(120 * time.Second)
 
@@ -163,8 +155,58 @@ func loginHandlerPost(w http.ResponseWriter, r *http.Request) {
 }
 
 
+func adminHandler(w http.ResponseWriter, r *http.Request) {
+	username, ok := verifySession(w, r, 2)
+	if !ok {
+		return
+	}
+	w.Write([]byte(fmt.Sprintf("Welcome %s!", username)))
+}
 
+func verifySession(w http.ResponseWriter, r *http.Request, role int) (string, bool) {
+	c, err := r.Cookie("session_token")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			log.Println("No session cookie found")
+			return "", false
+		}
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return "", false
+	}
 
+	
+	sessionToken := c.Value
+	userSession, exists := sessions[sessionToken]
+	
+	var access int
+	switch userSession.role {
+	case "student":
+		access = 1
+	case "admin":
+		access = 2
+	default:
+		access = 0
+	}
+
+	//log.Printf("Session token: %s, Username: %s, Role: %d, Access level: %d\n", sessionToken, userSession.username, role, access)
+
+	if !exists || userSession.isExpired() {
+		log.Println("Invalid or expired session token")
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return "", false
+	}
+
+	fmt.Printf("Role: %d type: %T\n", role, role)
+	fmt.Printf("Access: %d type: %T\n", access, access)
+
+	if access < role {
+		log.Printf("Insufficient access level for user %s. Required: %d, User's access: %d\n", userSession.username, role, access)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return "", false
+	}
+	return userSession.username, true
+}
 
 func main() {
 	mux := http.NewServeMux()
@@ -174,7 +216,7 @@ func main() {
 	mux.HandleFunc("/", loginHandler)
 	mux.HandleFunc("/student", student)
 	mux.HandleFunc("/save", save)
-	//mux.HandleFunc("/admin", adminHandler)
+	mux.HandleFunc("/admin", adminHandler)
 	mux.HandleFunc("POST /login", loginHandlerPost)
 
 	//I need to start a cookie session, and have each handler check if the user is authenticated
