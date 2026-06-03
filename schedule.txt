@@ -1,1 +1,7 @@
+<<<<<<< HEAD
 
+=======
+TESTESTTETEST
+LETS DO IT NOW
+Hello Seth
+>>>>>>> 38567d849653012f04ce8033b30192827c6b66b5
