@@ -13,6 +13,9 @@ type Schedule struct {
 	Friday [2]int
 } 
 
+
+var shifts = map[string]Schedule{} // Map to store the schedule for each user
+
 // SetSchedule method to set the schedule for a specific day
 func (s *Schedule) SetSchedule(d string, start int, end int) [2]int {
 	switch d {
