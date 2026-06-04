@@ -174,8 +174,8 @@
                 const maxBlock = Math.max(...blockIndices);
                 
                 //Here is where I convert the block indices to actual hours and minutes. Each block is 10 minutes, so I divide by 6 to get hours and take the remainder to get minutes.
-                const startHourVal = startHour + (minBlock / 6);
-                const endHourVal = startHour + (maxBlock + 1) / 6;
+                const startHourVal = startHour + Math.round((minBlock / 6) * 1000) / 1000;;
+                const endHourVal = startHour + Math.round((maxBlock + 1) / 6 * 1000) / 1000;
                 
                 selection[dragStart.day] = [startHourVal, endHourVal];
             } else {
@@ -209,9 +209,9 @@
                 selection[day] = [startHourVal, endHourVal];
                 
                 // Convert hours back to block indices
-                const startBlockIdx = (startHourVal - startHour) * blocksPerHour;
-                const endBlockIdx = (endHourVal - startHour) * blocksPerHour - 1;
-                
+                const startBlockIdx = Math.round((startHourVal - startHour) * blocksPerHour);
+                const endBlockIdx = Math.round((endHourVal - startHour) * blocksPerHour) - 1;
+                        
                 for (let i = startBlockIdx; i <= endBlockIdx; i++) {
                     if (i >= 0 && i < totalBlocks) {
                         persistedSelection[day].add(i);
