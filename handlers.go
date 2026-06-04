@@ -6,7 +6,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,12 +14,17 @@ import (
 
 // Home handler to render the home page
 func student(w http.ResponseWriter, r *http.Request) {
-	_, ok := verifySession(w, r, 1)
+	username, ok := verifySession(w, r, 1)
 	if !ok {
 		log.Println("Unauthorized access attempt to student page")
 		return
 	}
-	
+	//Check if the user has a schedule, if not create an empty one for them
+	if _, exists := shifts[username]; !exists {
+		shifts[username] = Schedule{}
+	}
+
+
 	ts, err := template.ParseFiles("./templates/student.html")
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -28,7 +32,7 @@ func student(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
-	err = ts.Execute(w, nil)
+	err = ts.Execute(w, map[string]interface{}{"Schedule": shifts[username]})
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Println("Error executing template:", err)
@@ -44,29 +48,26 @@ func save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var data map[string]string
-	json.NewDecoder(r.Body).Decode(&data)
-
-	inputValue := data["data"]
-
-	// Write input value to schedule.txt
-	file, err := os.OpenFile("schedule.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	var schedule Schedule
+	err := json.NewDecoder(r.Body).Decode(&schedule)
 	if err != nil {
-		http.Error(w, "Failed to save data", http.StatusInternalServerError)
-		log.Println("Error opening file:", err)
-		return
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(inputValue + "\n")
-	if err != nil {
-		http.Error(w, "Failed to save data", http.StatusInternalServerError)
-		log.Println("Error writing to file:", err)
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		log.Println("Error decoding JSON:", err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	username, ok := verifySession(w, r, 1)
+	if !ok {
+		log.Println("Unauthorized access attempt to save schedule")
+		return
+	}
+	shifts[username] = schedule
+	schedule.PrintSchedule()
+	
+
+	
+
+	
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
