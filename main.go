@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	
 )
-
 
 func main() {
 	mux := http.NewServeMux()
@@ -17,7 +15,7 @@ func main() {
 	mux.HandleFunc("/student", student)
 	mux.HandleFunc("/save", save)
 	mux.HandleFunc("/admin", adminHandler)
-	mux.HandleFunc("POST /login", loginHandlerPost)
+	mux.HandleFunc("/login", loginHandlerPost)
 
 	fmt.Println("Server is running on http://localhost:4000")
 	err := http.ListenAndServe(":4000", mux)

@@ -1,0 +1,225 @@
+{{define "weekly_schedule"}}
+<p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">Click and drag to select your shift hours (8am–6pm). Each block represents 10 minutes.</p>
+{{if not .CanWrite}}
+<p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">This schedule is read-only.</p>
+{{end}}
+<div class="schedule-container" style="position: relative;">
+    <div id="scheduleGrid" style="display: grid; grid-template-columns: 80px repeat(60, 1fr); gap: 0;">
+    </div>
+    <div class="grid-ticks" aria-hidden="true"></div>
+</div>
+<form id="scheduleForm" class="schedule-form" style="{{if not .CanWrite}}display: none;{{end}}">
+    <button type="submit">Save Schedule</button>
+</form>
+<script>
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const startHour = 8;
+    const endHour = 18;
+    const blocksPerHour = 6; // 10-minute blocks
+    const totalBlocks = (endHour - startHour) * blocksPerHour; // 60 blocks
+    const canWrite = {{if .CanWrite}}true{{else}}false{{end}};
+
+    let isDragging = false;
+    let dragStart = null;
+    let currentDragSelection = {
+        Monday: new Set(),
+        Tuesday: new Set(),
+        Wednesday: new Set(),
+        Thursday: new Set(),
+        Friday: new Set()
+    };
+    let persistedSelection = {
+        Monday: new Set(),
+        Tuesday: new Set(),
+        Wednesday: new Set(),
+        Thursday: new Set(),
+        Friday: new Set()
+    };
+    const selection = {
+        Monday: [0.0, 0.0],
+        Tuesday: [0.0, 0.0],
+        Wednesday: [0.0, 0.0],
+        Thursday: [0.0, 0.0],
+        Friday: [0.0, 0.0]
+    };
+
+    const grid = document.getElementById('scheduleGrid');
+
+    const emptyHeader = document.createElement('div');
+    emptyHeader.className = 'grid-header-empty';
+    emptyHeader.textContent = 'Time';
+    grid.appendChild(emptyHeader);
+
+    for (let i = 0; i < 10; i++) {
+        const hour = startHour + i;
+        const hourLabel = hour > 12 ? (hour - 12) + 'pm' : (hour === 12 ? '12pm' : hour + 'am');
+        const header = document.createElement('div');
+        header.className = 'grid-header-time';
+        header.style.gridColumn = 'span 6';
+        header.textContent = hourLabel;
+        grid.appendChild(header);
+    }
+
+    for (let dayIdx = 0; dayIdx < days.length; dayIdx++) {
+        const day = days[dayIdx];
+
+        const dayLabel = document.createElement('div');
+        dayLabel.className = 'day-label';
+        dayLabel.textContent = day.slice(0, 3);
+        grid.appendChild(dayLabel);
+
+        for (let blockIdx = 0; blockIdx < totalBlocks; blockIdx++) {
+            const hour = startHour + Math.floor(blockIdx / 6);
+            const min = (blockIdx % 6) * 10;
+
+            const block = document.createElement('div');
+            block.dataset.day = day;
+            block.dataset.blockIdx = blockIdx;
+            block.dataset.hour = hour;
+            block.dataset.min = min;
+            block.className = 'schedule-block';
+
+            if (canWrite) {
+                block.addEventListener('mousedown', startDrag);
+                block.addEventListener('mouseover', dragOver);
+                block.addEventListener('mouseup', endDrag);
+            }
+
+            grid.appendChild(block);
+        }
+    }
+
+    function updateVisualization() {
+        document.querySelectorAll('.schedule-block').forEach(block => {
+            const day = block.dataset.day;
+            const blockIdx = parseInt(block.dataset.blockIdx);
+
+            if (currentDragSelection[day].has(blockIdx)) {
+                block.style.background = 'rgba(255,140,140,0.6)';
+                block.style.boxShadow = '0 0 0 2px rgba(255,140,140,0.25)';
+            } else if (persistedSelection[day].has(blockIdx)) {
+                block.style.background = 'rgba(88,205,170,0.55)';
+                block.style.boxShadow = 'inset 0 1px 2px rgba(0, 0, 0, 0.06)';
+            } else {
+                block.style.background = 'transparent';
+                block.style.boxShadow = 'none';
+            }
+        });
+    }
+
+    function startDrag(e) {
+        if (e.button !== 0) return;
+        isDragging = true;
+        dragStart = {
+            day: e.target.dataset.day,
+            blockIdx: parseInt(e.target.dataset.blockIdx)
+        };
+        for (const day in currentDragSelection) {
+            currentDragSelection[day].clear();
+        }
+    }
+
+    function dragOver(e) {
+        if (!isDragging || !dragStart) return;
+
+        const currentDay = e.target.dataset.day;
+        const currentBlockIdx = parseInt(e.target.dataset.blockIdx);
+
+        if (!currentDay || isNaN(currentBlockIdx)) return;
+        if (currentDay !== dragStart.day) return;
+
+        currentDragSelection[dragStart.day].clear();
+
+        const minBlock = Math.min(dragStart.blockIdx, currentBlockIdx);
+        const maxBlock = Math.max(dragStart.blockIdx, currentBlockIdx);
+
+        for (let i = minBlock; i <= maxBlock; i++) {
+            currentDragSelection[dragStart.day].add(i);
+        }
+
+        updateVisualization();
+    }
+
+    function endDrag(e) {
+        if (!isDragging || !dragStart) {
+            isDragging = false;
+            return;
+        }
+
+        isDragging = false;
+
+        const daySelection = currentDragSelection[dragStart.day];
+        if (daySelection.size > 0) {
+            persistedSelection[dragStart.day] = new Set(daySelection);
+            const blockIndices = Array.from(daySelection).sort((a, b) => a - b);
+            const minBlock = Math.min(...blockIndices);
+            const maxBlock = Math.max(...blockIndices);
+
+            const startHourVal = startHour + Math.round((minBlock / 6) * 1000) / 1000;
+            const endHourVal = startHour + Math.round((maxBlock + 1) / 6 * 1000) / 1000;
+
+            selection[dragStart.day] = [startHourVal, endHourVal];
+        } else {
+            persistedSelection[dragStart.day].clear();
+            selection[dragStart.day] = [0, 0];
+        }
+
+        currentDragSelection[dragStart.day].clear();
+        updateVisualization();
+    }
+
+    const sched_mon = [{{if .Schedule}}{{index .Schedule.Monday 0}}, {{index .Schedule.Monday 1}}{{else}}0, 0{{end}}];
+    const sched_tue = [{{if .Schedule}}{{index .Schedule.Tuesday 0}}, {{index .Schedule.Tuesday 1}}{{else}}0, 0{{end}}];
+    const sched_wed = [{{if .Schedule}}{{index .Schedule.Wednesday 0}}, {{index .Schedule.Wednesday 1}}{{else}}0, 0{{end}}];
+    const sched_thu = [{{if .Schedule}}{{index .Schedule.Thursday 0}}, {{index .Schedule.Thursday 1}}{{else}}0, 0{{end}}];
+    const sched_fri = [{{if .Schedule}}{{index .Schedule.Friday 0}}, {{index .Schedule.Friday 1}}{{else}}0, 0{{end}}];
+
+    const passedSchedule = {
+        Monday: sched_mon,
+        Tuesday: sched_tue,
+        Wednesday: sched_wed,
+        Thursday: sched_thu,
+        Friday: sched_fri
+    };
+
+    for (const day in passedSchedule) {
+        const [startHourVal, endHourVal] = passedSchedule[day];
+        if (startHourVal > 0 && endHourVal > 0) {
+            selection[day] = [startHourVal, endHourVal];
+            const startBlockIdx = Math.round((startHourVal - startHour) * blocksPerHour);
+            const endBlockIdx = Math.round((endHourVal - startHour) * blocksPerHour) - 1;
+
+            for (let i = startBlockIdx; i <= endBlockIdx; i++) {
+                if (i >= 0 && i < totalBlocks) {
+                    persistedSelection[day].add(i);
+                }
+            }
+        }
+    }
+
+    updateVisualization();
+
+    if (canWrite) {
+        document.getElementById('scheduleForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            fetch('/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(selection)
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Success:', data);
+                alert('Schedule saved successfully!');
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error saving schedule');
+            });
+        });
+    }
+</script>
+{{end}}

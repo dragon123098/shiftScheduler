@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
 )
 
 // Home handler to render the home page
@@ -24,15 +23,16 @@ func student(w http.ResponseWriter, r *http.Request) {
 		shifts[username] = Schedule{}
 	}
 
-
-	ts, err := template.ParseFiles("./templates/student.html")
+	s, err := template.ParseFiles("./templates/student.html", "./templates/weekly_schedule.html")
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Println("Error parsing template:", err)
 
 		return
 	}
-	err = ts.Execute(w, map[string]interface{}{"Schedule": shifts[username]})
+
+	schedule := shifts[username]
+	err = s.Execute(w, WeeklyScheduleComponentData{Schedule: &schedule, CanWrite: true})
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Println("Error executing template:", err)
@@ -63,11 +63,7 @@ func save(w http.ResponseWriter, r *http.Request) {
 	}
 	shifts[username] = schedule
 	schedule.PrintSchedule()
-	
 
-	
-
-	
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -89,18 +85,17 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf("Welcome %s!", username)))
 }
 
-
 func loginHandlerPost(w http.ResponseWriter, r *http.Request) {
-	
+
 	log.Println("Login attempt received")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	// Read form values instead of JSON
-    username := r.FormValue("username")
-    password := r.FormValue("password")
+	username := r.FormValue("username")
+	password := r.FormValue("password")
 
 	user, exists := users[username]
 	if !exists || user.Password != password {
@@ -108,7 +103,7 @@ func loginHandlerPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//This addeds a session to our map. 
+	//This addeds a session to our map.
 	//You can access the session by using the Value in the cookie, which is the session token.
 	sessionToken := uuid.NewString()
 	expiresAt := time.Now().Add(120 * time.Second)
@@ -116,11 +111,11 @@ func loginHandlerPost(w http.ResponseWriter, r *http.Request) {
 	sessions[sessionToken] = session{username: username, expiry: expiresAt, role: user.Role}
 
 	http.SetCookie(w, &http.Cookie{
-		Name: "session_token",
-		Value: sessionToken,
+		Name:    "session_token",
+		Value:   sessionToken,
 		Expires: expiresAt,
 	})
-	
+
 	// If the user is authenticated, redirect to the appropriate page based on their role
 	switch user.Role {
 	case "student":
@@ -131,9 +126,7 @@ func loginHandlerPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unknown role", http.StatusInternalServerError)
 	}
 
-
 }
-
 
 func verifySession(w http.ResponseWriter, r *http.Request, role int) (string, bool) {
 	c, err := r.Cookie("session_token")
@@ -147,10 +140,9 @@ func verifySession(w http.ResponseWriter, r *http.Request, role int) (string, bo
 		return "", false
 	}
 
-	
 	sessionToken := c.Value
 	userSession, exists := sessions[sessionToken]
-	
+
 	var access int
 	switch userSession.role {
 	case "student":
